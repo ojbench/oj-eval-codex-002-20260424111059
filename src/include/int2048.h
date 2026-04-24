@@ -13,13 +13,29 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <string>
 #include <vector>
 
 // Do not use "using namespace std;"
 
 namespace sjtu {
 class int2048 {
-  // todo
+  // Internal representation: base 1000, little-endian digits
+  static const int BASE = 1000;
+  static const int BASE_DIGS = 3;
+  std::vector<int> a; // digits, a[0] is least significant
+  bool neg;
+
+  // Helpers
+  void trim();
+  static int cmp_abs(const int2048 &, const int2048 &);
+  static void add_abs_to(std::vector<int> &dst, const std::vector<int> &src);
+  static void sub_abs_from(std::vector<int> &dst, const std::vector<int> &src); // assumes |dst|>=|src|
+  static int2048 mul_simple(const int2048 &, const int2048 &);
+  static int2048 mul_fft(const int2048 &, const int2048 &);
+  static void divmod_abs(const int2048 &x, const int2048 &y, int2048 &q, int2048 &r);
+  static void mul_scalar(std::vector<int> &v, int m);
+  static void add_scalar_shifted(std::vector<int> &v, const std::vector<int> &w, long long m, size_t shift);
 public:
   // Constructors
   int2048();
