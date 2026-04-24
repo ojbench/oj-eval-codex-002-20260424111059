@@ -191,9 +191,60 @@ int2048 int2048::mul_simple(const int2048 &x, const int2048 &y) {
   return res;
 }
 
+namespace {
+using cd = std::complex<long double>;
+const long double PI = acosl(-1.0L);
+
+void fft(std::vector<cd> &a, bool invert) {
+  int n = (int)a.size();
+  for (int i = 1, j = 0; i < n; ++i) {
+    int bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) std::swap(a[i], a[j]);
+  }
+  for (int len = 2; len <= n; len <<= 1) {
+    long double ang = 2 * PI / len * (invert ? -1 : 1);
+    cd wlen(cosl(ang), sinl(ang));
+    for (int i = 0; i < n; i += len) {
+      cd w(1);
+      for (int j = 0; j < len / 2; ++j) {
+        cd u = a[i + j];
+        cd v = a[i + j + len / 2] * w;
+        a[i + j] = u + v;
+        a[i + j + len / 2] = u - v;
+        w *= wlen;
+      }
+    }
+  }
+  if (invert) {
+    for (int i = 0; i < n; ++i) a[i] /= n;
+  }
+}
+}
+
 int2048 int2048::mul_fft(const int2048 &x, const int2048 &y) {
-  // Fallback to simple multiplication for now
-  return mul_simple(x, y);
+  int2048 res; res.neg = x.neg ^ y.neg;
+  if (x.a.empty() || y.a.empty()) { res.neg = false; return res; }
+  std::vector<cd> fa(x.a.begin(), x.a.end()), fb(y.a.begin(), y.a.end());
+  int n = 1;
+  while (n < (int)x.a.size() + (int)y.a.size()) n <<= 1;
+  fa.resize(n); fb.resize(n);
+  fft(fa, false); fft(fb, false);
+  for (int i = 0; i < n; ++i) fa[i] *= fb[i];
+  fft(fa, true);
+  std::vector<long long> tmp(n);
+  for (int i = 0; i < n; ++i) tmp[i] = (long long) llround(fa[i].real());
+  long long carry = 0;
+  res.a.assign(n, 0);
+  for (int i = 0; i < n; ++i) {
+    long long cur = tmp[i] + carry;
+    res.a[i] = int(cur % BASE);
+    carry = cur / BASE;
+  }
+  while (carry) { res.a.push_back(int(carry % BASE)); carry /= BASE; }
+  res.trim();
+  return res;
 }
 
 void int2048::divmod_abs(const int2048 &X, const int2048 &Y, int2048 &Q, int2048 &R) {
@@ -353,7 +404,10 @@ int2048 &int2048::operator-=(const int2048 &o) { return minus(o); }
 int2048 operator-(int2048 x, const int2048 &y) { return x.minus(y); }
 
 int2048 &int2048::operator*=(const int2048 &o) {
-  *this = mul_simple(*this, o);
+  size_t n = a.size(), m = o.a.size();
+  if (n == 0 || m == 0) { a.clear(); neg = false; return *this; }
+  if (std::min(n, m) < 256) *this = mul_simple(*this, o);
+  else *this = mul_fft(*this, o);
   return *this;
 }
 int2048 operator*(int2048 x, const int2048 &y) { x *= y; return x; }
